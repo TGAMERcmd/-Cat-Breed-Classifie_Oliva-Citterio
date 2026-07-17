@@ -4,140 +4,129 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score, train_test_split
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
 
-
-
-
-# carico i dataset
 train = pd.read_csv("cats_dataset.csv", dtype=str)
 test = pd.read_csv("test_set.csv", dtype=str)
 
-print("train:", train.shape)
-print("test:", test.shape)
+print(train.shape, test.shape)
 
-# rimuovo le righe senza razza perché non servono per allenare il modello
 train = train.dropna(subset=["razza"])
 train = train[train["razza"].str.lower() != "nan"]
 
-print("righe train dopo pulizia:", len(train))
+n = len(train)
 
-# salvo quante righe ha il train così dopo posso riseparare i due dataset
-n_train = len(train)
+df = pd.concat([train, test], ignore_index=True)
 
-# unisco tutto così converto i testi in numeri una volta sola
-tutto = pd.concat([train, test], ignore_index=True)
+df["peso_kg"] = df["peso_kg"].str.replace(",", ".", regex=False)
+df["peso_kg"] = pd.to_numeric(df["peso_kg"], errors="coerce").fillna(0)
+df["eta_anni"] = pd.to_numeric(df["eta_anni"], errors="coerce").fillna(0)
 
-# sistemo peso ed età che a volte hanno la virgola invece del punto
-tutto["peso_kg"] = tutto["peso_kg"].str.replace(",", ".", regex=False)
-tutto["peso_kg"] = pd.to_numeric(tutto["peso_kg"], errors="coerce").fillna(0)
-tutto["eta_anni"] = pd.to_numeric(tutto["eta_anni"], errors="coerce").fillna(0)
+cols = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
+        "frequenza_miagolio", "sterilizzato", "patologia"]
 
-# converto le colonne di testo in numeri
-colonne_testo = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
-                 "frequenza_miagolio", "sterilizzato", "patologia"]
+for c in cols:
+    df[c] = df[c].fillna("vuoto").astype("category").cat.codes
 
-for col in colonne_testo:
-    tutto[col] = tutto[col].fillna("vuoto").astype("category").cat.codes
+df["razza_num"] = df["razza"].fillna("sconosciuta").astype("category").cat.codes
+razze_map = dict(enumerate(df["razza"].fillna("sconosciuta").astype("category").cat.categories))
 
-# converto anche la razza che è quello che voglio predire
-tutto["razza_num"] = tutto["razza"].fillna("sconosciuta").astype("category").cat.codes
-mappa_razze = dict(enumerate(tutto["razza"].fillna("sconosciuta").astype("category").cat.categories))
+train_df = df.iloc[:n].copy()
+test_df = df.iloc[n:].copy()
 
-# riseparo train e test
-df_train = tutto.iloc[:n_train].copy()
-df_test = tutto.iloc[n_train:].copy()
+feat = ["eta_anni", "peso_kg"] + cols
 
-# preparo i dati per sklearn
-features = ["eta_anni", "peso_kg"] + colonne_testo
+X = train_df[feat].values
+y = train_df["razza_num"].values
+X_test_final = test_df[feat].values
 
-X = df_train[features].values
-y = df_train["razza_num"].values
-X_test = df_test[features].values
-
-print("features usate:", features)
-
-# alleno il modello
-modello = GradientBoostingClassifier(n_estimators=100, max_depth=4, random_state=42)
-modello.fit(X, y)
-
-# vedo quanto è preciso con la cross validation (l'ho visto in un tutorial)
-scores = cross_val_score(modello, X, y, cv=5)
-print(f"accuratezza media: {scores.mean() * 100:.2f}%")
-
-# faccio le predizioni sul test set
-pred_numeri = modello.predict(X_test)
-pred_nomi = [mappa_razze[n] for n in pred_numeri]
-
-# salvo i risultati
-risultati = pd.DataFrame({
-    "ID": df_test["ID"],
-    "razza_prevista": pred_nomi
-})
-risultati.to_csv("predictions.csv", index=False)
-print("predictions.csv salvato!")
-
-
-# ---- grafici ----
-
-# 1) quanti gatti per razza ci sono nel train
-plt.figure(figsize=(8, 4))
-df_train["razza"].value_counts().plot(kind="bar", color="skyblue", edgecolor="black")
-plt.title("quante gatti per razza")
-plt.xticks(rotation=15)
-plt.tight_layout()
-plt.savefig("grafici/01_razze.png")
-plt.close()
-
-# 2) correlazione tra età e peso
-plt.figure(figsize=(5, 4))
-sns.heatmap(df_train[["eta_anni", "peso_kg"]].corr(), annot=True, cmap="coolwarm")
-plt.title("età vs peso")
-plt.tight_layout()
-plt.savefig("grafici/02_correlazione.png")
-plt.close()
-
-# 3) matrice di confusione
-# splitTo train/val per vedere gli errori del modello
 X_tr, X_val, y_tr, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-modello2 = GradientBoostingClassifier(n_estimators=100, max_depth=4, random_state=42)
-modello2.fit(X_tr, y_tr)
+clf = GradientBoostingClassifier(n_estimators=100, max_depth=4, random_state=42)
+clf.fit(X_tr, y_tr)
 
-# FIX: uso solo le classi che esistono davvero in y_val, non tutte della mappa
-# altrimenti la matrice ha righe/colonne in più e non torna
+y_pred_val = clf.predict(X_val)
+
+acc = accuracy_score(y_val, y_pred_val)
+print(f"\naccuracy validation: {acc * 100:.2f}%")
+
+cv_scores = cross_val_score(clf, X, y, cv=5)
+print(f"cross-val media: {cv_scores.mean() * 100:.2f}% (+/- {cv_scores.std() * 100:.2f}%)")
+print(f"fold scores: {[round(s*100,1) for s in cv_scores]}")
+
 classi_val = sorted(set(y_val))
-nomi_classi_val = [mappa_razze[c] for c in classi_val]
+nomi_val = [razze_map[c] for c in classi_val]
+print()
+print(classification_report(y_val, y_pred_val, labels=classi_val, target_names=nomi_val))
 
-matrice = confusion_matrix(y_val, modello2.predict(X_val), labels=classi_val)
+modello_finale = GradientBoostingClassifier(n_estimators=100, max_depth=4, random_state=42)
+modello_finale.fit(X, y)
 
+preds = modello_finale.predict(X_test_final)
+pred_nomi = [razze_map[p] for p in preds]
+
+out = pd.DataFrame({
+    "ID": test_df["ID"],
+    "razza_prevista": pred_nomi
+})
+out.to_csv("predictions.csv", index=False)
+print("\npredictions.csv salvato")
+
+
+# grafici
+
+plt.figure(figsize=(8, 4))
+train_df["razza"].value_counts().plot(kind="bar", color="skyblue", edgecolor="black")
+plt.title("razze nel dataset")
+plt.xticks(rotation=15)
+plt.tight_layout()
+plt.savefig("grafici/razze.png")
+plt.close()
+
+plt.figure(figsize=(5, 4))
+sns.heatmap(train_df[["eta_anni", "peso_kg"]].corr(), annot=True, cmap="coolwarm")
+plt.title("eta vs peso")
+plt.tight_layout()
+plt.savefig("grafici/correlazione.png")
+plt.close()
+
+mat = confusion_matrix(y_val, y_pred_val, labels=classi_val)
 plt.figure(figsize=(7, 5))
-sns.heatmap(matrice, annot=True, fmt="d", cmap="Blues",
-            xticklabels=nomi_classi_val, yticklabels=nomi_classi_val)
-plt.title("matrice di confusione")
+sns.heatmap(mat, annot=True, fmt="d", cmap="Blues",
+            xticklabels=nomi_val, yticklabels=nomi_val)
+plt.title("matrice confusione")
 plt.ylabel("reale")
 plt.xlabel("predetto")
 plt.tight_layout()
-plt.savefig("grafici/03_confusione.png")
+plt.savefig("grafici/confusione.png")
 plt.close()
 
-# 4) scatter peso vs età colorato per razza
 plt.figure(figsize=(8, 5))
-sns.scatterplot(data=df_train, x="eta_anni", y="peso_kg", hue="razza", alpha=0.7)
-plt.title("peso vs età")
+sns.scatterplot(data=train_df, x="eta_anni", y="peso_kg", hue="razza", alpha=0.7)
+plt.title("peso vs eta")
 plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
-plt.savefig("grafici/04_scatter.png")
+plt.savefig("grafici/scatter.png")
 plt.close()
 
-# 5) quali feature contano di più per il modello
 plt.figure(figsize=(8, 4))
-importanze = modello.feature_importances_
-ordine = np.argsort(importanze)
-plt.barh([features[i] for i in ordine], importanze[ordine], color="teal")
+imp = modello_finale.feature_importances_
+idx = np.argsort(imp)
+plt.barh([feat[i] for i in idx], imp[idx], color="teal")
 plt.title("feature importance")
 plt.tight_layout()
-plt.savefig("grafici/05_importanza.png")
+plt.savefig("grafici/importanza.png")
 plt.close()
 
-print("grafici salvati!")
+plt.figure(figsize=(6, 3))
+plt.bar(range(1, 6), cv_scores * 100, color="steelblue", edgecolor="black")
+plt.axhline(cv_scores.mean() * 100, color="red", linestyle="--", label=f"media: {cv_scores.mean()*100:.1f}%")
+plt.title("accuracy per fold")
+plt.xlabel("fold")
+plt.ylabel("accuracy %")
+plt.legend()
+plt.tight_layout()
+plt.savefig("grafici/crossval.png")
+plt.close()
+
+print("grafici fatto ")
