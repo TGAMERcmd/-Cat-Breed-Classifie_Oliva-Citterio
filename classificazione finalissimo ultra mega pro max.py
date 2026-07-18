@@ -1,9 +1,9 @@
 """
-Pandas per 
-numpy per
-matplot per creare il grafico
-seaborn per
-sklearn per 
+pandas per caricare i dati nelle tabelle
+numpy per calcoli e ordinamento delle liste
+matplot per fare grafici
+seaborn per fare grafici
+sklearn per allenamento del modello
 """
 import pandas as pd
 import numpy as np
@@ -19,36 +19,42 @@ new_line = "\n"
 train = pd.read_csv("cats_dataset.csv", dtype=str)
 test = pd.read_csv("test_set.csv", dtype=str)
 
-print(train.shape, test.shape)
+# per caricare i dati di training e di test
+train.shape
+test.shape
 
-# alleniamo per predirre la razza
+# pulizia del dataset (i dati che non contengono una razza)
 train = train.dropna(subset=["razza"])
 train = train[train["razza"].str.lower() != "nan"]
 
 n = len(train)
 
 # DataFrame, una struttura bidimensionale simile ad una tabella
+# temporaneamente uniamo train e test, in modo che la stessa stringa verrà 
+# convertita nello stesso numero sia nel train che nel test
 df = pd.concat([train, test], ignore_index=True)
 
-# pulizia dei dati (?)
+# pulizia dei dati - alcuni pesi hanno la virgola, altri i punti. Così li rendiamo tutti uguali
 df["peso_kg"] = df["peso_kg"].str.replace(",", ".", regex=False)
 df["peso_kg"] = pd.to_numeric(df["peso_kg"], errors="coerce").fillna(0)
 df["eta_anni"] = pd.to_numeric(df["eta_anni"], errors="coerce").fillna(0)
 
-# definisce le colonne del DataFrame, e poi le aggiunge
+# definisce le colonne del DataFrame, e le converte in numeri (.cat.codes)
 cols = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
         "frequenza_miagolio", "sterilizzato", "patologia"]
 
 for c in cols:
     df[c] = df[c].fillna("vuoto").astype("category").cat.codes
+df["razza_num"] = df["razza"].fillna("sconosciuta").astype("category").cat.codes
+
+# dizionario con numero razza --> nome razza
+razze_map = dict(enumerate(df["razza"].fillna("sconosciuta").astype("category").cat.categories))
 
 """
 Noi utilizziamo una tecnica particolare. Praticamente il valore x rappresenta tutti i parametri da considerare, mentre
 y rappresenta il nostro risultato, o predizione. All'inizio il modello studia i parametri e come trasformano y, 
 poi togliamo y e osserviamo come il modello effettua le predizioni sul suo valore
 """
-df["razza_num"] = df["razza"].fillna("sconosciuta").astype("category").cat.codes
-razze_map = dict(enumerate(df["razza"].fillna("sconosciuta").astype("category").cat.categories))
 
 # creiamo una copia del DataFrame di allenamento e di test
 train_df = df.iloc[:n].copy()
