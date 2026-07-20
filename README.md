@@ -12,21 +12,8 @@ Scelto perché funziona molto bene su dati tabulari con feature miste
 - Accuracy validation set: 95.26%
 - Accuracy cross-validation (5 fold): 96.63% 
 
-Il dataset contiene un record con razza "Alien" (1 solo esemplare).
-Il modello lo classifica correttamente come outlier senza allucinare razze inesistenti.
-
-## Struttura repository
-
-├── main.py # codice completo commentato
-├── cats_dataset.csv # training set
-├── test_set.csv # test set
-├── predictions.csv # predizioni finali
-└── grafici/
-├── razze.png # distribuzione razze nel training set
-├── correlazione.png # heatmap correlazione features numeriche
-├── confusione.png # matrice di confusione sul validation set
-├── importanza.png # feature importance del modello
-└── crossval.png # accuracy per fold della cross-validation
+Il dataset contiene un record con razza "Alien" che abbasa l'accuracy
+Il modello lo classifica come outlier senza allucinare razze inesistenti
 
 
 ## Librerie utilizzate
