@@ -21,56 +21,55 @@ new_line = "\n"
 train = pd.read_csv("cats_dataset.csv", dtype=str)
 test = pd.read_csv("test_set.csv", dtype=str)
 
-#CONTROLLARE RECAL INVECE DI RECALL
-
-# stampa le dimensioni dei due dataset (righe, colonne)
-# serve a verificare che i file siano stati caricati correttamente
-print(train.shape, test.shape) 
-
 # pulizia del dataset per il training(i dati che non contengono una razza)
 train = train.dropna(subset=["razza"])
 train = train[train["razza"].str.lower() != "nan"]
 
-# salvo quante righe ha il train così dopo posso riseparare i due dataset
-n = len(train)
+# Per separare i dataset (che a breve unisco) devo salvarmi il numero di righe originali
+numero_righe_originali = len(train)
 
-# DataFrame, una struttura bidimensionale simile ad una tabella
-# temporaneamente uniamo train e test, in modo che la stessa stringa verrà 
-# convertita nello stesso numero sia nel train che nel test altrimenti il modello si confonderebbe
+# DataFrame (df), una struttura bidimensionale simile ad una tabella
+"""
+Uniamo temporaneamente i due dataset per:
+* semplificare operazioni di pulizia
+* per fare in modo che ogni dato uguale venga convertito nello stesso numero.
+        - Esempio: Siamese = 1 
+"""
 df = pd.concat([train, test], ignore_index=True)
 
-# pulizia dei dati - alcuni pesi hanno la virgola, altri i punti. Così li rendiamo tutti uguali usando pandas 
+# pulizia dei dati perchè alcuni valori decimali hanno il punto, altri la virgola 
 df["peso_kg"] = df["peso_kg"].str.replace(",", ".", regex=False)
+
+
+# visto che il il modello non capisce le parole dobbiamo usare i numeri (.to_numeric)
 df["peso_kg"] = pd.to_numeric(df["peso_kg"], errors="coerce").fillna(0)
 df["eta_anni"] = pd.to_numeric(df["eta_anni"], errors="coerce").fillna(0)
 
-# definisce le colonne del DataFrame, e le converte in numeri (.cat.codes)
-# visto che il il modello non capisce le parole dobbiamo usare i numeri 
-# cat.codes converte ogni valore unico in un numero 
-# valori mancanti riempio con "vuoto" così non perdono informazione
+# definisce le colonne del DataFrame
 cols = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
         "frequenza_miagolio", "sterilizzato", "patologia"]
 
-# salvo livello_attivita originale prima che cat.codes la sovrascriva
-df["livello_attivita_orig"] = df["livello_attivita"]
-
+# converte le colonne in numeri (.cat.codes --> ad ogni valore unico viene assegnato un numero)
+# per non perdere informazioni, i valori mancanti vengono riempiti con "vuoto"
 for c in cols:
     df[c] = df[c].fillna("vuoto").astype("category").cat.codes
-# converto anche la razza in numero, che è quello che il modello dovrà predire
+
+# converte la razza in numero
 df["razza_num"] = df["razza"].fillna("sconosciuta").astype("category").cat.codes
 
-# dizionario con numero razza --> nome razza che verrà usato nuovamente per riconvertire le predizione sulla razza
+
+
+# dizionario con "numero razza" --> "nome razza"
+# usato per trasformare il numero che il modello predice in razza (stringa)
 razze_map = dict(enumerate(df["razza"].fillna("sconosciuta").astype("category").cat.categories))
 
-# abbiamo finito con le modifiche ad entrambi i dataset, 
-# ora li separiamo nuovamente
-train_df = df.iloc[:n].copy()
-test_df = df.iloc[n:].copy()
 
-"""
-feat sono le "feature predittive", ovvero i parametri che passeremo al modello per fare le predizioni
-sulla razza del gatto.
-"""
+# separa i dataset (modifiche terminate)
+train_df = df.iloc[:numero_righe_originali].copy()
+test_df = df.iloc[numero_righe_originali:].copy()
+
+
+# feat sono le "feature predittive", ovvero i parametri che passeremo al modello per fare le predizioni sulla razza del gatto.
 feat = ["eta_anni" , "peso_kg"] + cols
 
 """
@@ -85,8 +84,8 @@ X_test_final = test_df[feat].values #dataset di test
 # si allena sull'80% dei gatti (in fase di training -- test_size=0.2). Poi facciamo il controllo sul restante 20% per verificare quanto sbaglia 
 # stratify=y garantisce che tutte le razze siano presenti sia nell'80% che nel 20% 
 # altrimenti potrebbe capitare che una razza finisca tutta nell'80% e il modello non venga mai testato su di essa
-#! TODO: Correggere spiegazione
 X_tr, X_val, y_tr, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
 # abbiamo scelto GradientBoosting perché funziona molto bene su dati tabulari come in questa challange 
 # allena tanti alberi in sequenza (100). Se uno sbaglia, gli altri alberi lo correggono.
 # così otteniamo un modello molto più preciso
@@ -122,7 +121,7 @@ nomi_val = [razze_map[c] for c in classi_val]
 #dopo
 # stampa un report dettagliato per ogni razza  usando 4 metriche precise 
 # 1 precision quando dice "è un Bengala" quante volte ha ragione (es. 0.90 = 90%)
-# 2 recal di tutti i Bengala reali, quanti ne ha trovati (es. 0.97 = ne trova 97 su 100)
+# 2 recall di tutti i Bengala reali, quanti ne ha trovati (es. 0.97 = ne trova 97 su 100)
 # 3 f1-score è la media bilanciata tra precision e recall, il voto finale possiamo dire
 # 4 support quanti gatti di quella razza ci sono nel 20% di test
 print(new_line, classification_report(y_val, y_pred_val, labels=classi_val, target_names=nomi_val), sep="")
@@ -155,6 +154,15 @@ plt.tight_layout()
 plt.savefig("grafici/razze.png")
 plt.close()
 
+
+# heatmap correlazione tra le feature numeriche  richiesto dal regolamento 
+plt.figure(figsize=(5, 4))
+sns.heatmap(train_df[["eta_anni", "peso_kg"]].corr(), annot=True, cmap="coolwarm")
+plt.title("correlazione eta vs peso")
+plt.tight_layout()
+plt.savefig("grafici/correlazione.png")
+plt.close()
+
 # matrice della confusione cioè mostra fli errori del modello razza per razza
 # sulla diagonale ci sono i gatti classificati correttamente
 # fuori dalla diagonale ci sono gli erorri
@@ -168,23 +176,6 @@ plt.ylabel("reale")
 plt.xlabel("predetto")
 plt.tight_layout()
 plt.savefig("grafici/confusione.png")
-plt.close()
-
-# heatmap correlazione tra eta e livello di attivita
-# usiamo un mapping manuale così i numeri hanno senso sedentario=0, molto_attivo=3
-ordine_attivita = {"sedentario": 0, "moderato": 1, "attivo": 2, "molto_attivo": 3}
-train_df["livello_attivita_num"] = train_df["livello_attivita_orig"].map(ordine_attivita)
-plt.figure(figsize=(5, 4))
-sns.heatmap(
-    train_df[["eta_anni", "livello_attivita_num"]].corr(),
-    annot=True,
-    cmap="coolwarm",
-    xticklabels=["eta_anni", "livello_attivita"],
-    yticklabels=["eta_anni", "livello_attivita"]
-)
-plt.title("correlazione eta vs livello attivita")
-plt.tight_layout()
-plt.savefig("grafici/correlazione.png")
 plt.close()
 
 
