@@ -49,6 +49,11 @@ df["eta_anni"] = pd.to_numeric(df["eta_anni"], errors="coerce").fillna(0)
 cols = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
         "frequenza_miagolio", "sterilizzato", "patologia"]
 
+
+# salvo livello_attivita originale prima che cat.codes la sovrascriva
+df["livello_attivita_orig"] = df["livello_attivita"]
+
+
 # converte le colonne in numeri (.cat.codes --> ad ogni valore unico viene assegnato un numero)
 # per non perdere informazioni, i valori mancanti vengono riempiti con "vuoto"
 for c in cols:
@@ -103,9 +108,12 @@ Abbiamo scelto il GradientBoosting perché funziona molto bene su dati tabulari.
 Il GradientBoosting allena tanti alberi in sequenza (nel nostro caso, 100). Se un albero sbaglia, gli altri alberi lo correggono.
 Questa auto-correzione consente di ottenere un modello molto più preciso, in quanto ogni albero impara dagli errori di un altro.
 
-#! TODO: Chiarifica
-* max_depth=4 --> quante domande può fare ogni albero
-* random_state=42 --> imposta la casualità per ottenere risultati riproducibili
+max_depth=4: limita quante domande può fare prima di dare una risposta, in questo caso 4 domande in sequenza
+Un valore troppo alto rischia di memorizzare i dati invece di imparare i pattern creando l'overfitting.
+
+random_state=42: il modello usa la casualità in alcune fasi dell'allenamento, il numero 42 è una convenzione
+Fissare questo numero garantisce che rieseguendo il codice si ottengano sempre gli stessi risultati.
+
 """
 clf = GradientBoostingClassifier(n_estimators=100, max_depth=4, random_state=42)
 clf.fit(X_tr, y_tr)
@@ -177,10 +185,20 @@ plt.savefig("grafici/razze.png")
 plt.close()
 
 
-# heatmap correlazione tra le feature numeriche
+# heatmap correlazione tra eta e livello di attivita 
+# usiamo un mapping manuale così i numeri hanno senso sedentario=0, molto_attivo=3
+# cat.codes li ordinerebbe alfabeticamente e non avrebbe senso
+ordine_attivita = {"sedentario": 0, "moderato": 1, "attivo": 2, "molto_attivo": 3}
+train_df["livello_attivita_num"] = train_df["livello_attivita"].map(ordine_attivita)
 plt.figure(figsize=(5, 4))
-sns.heatmap(train_df[["eta_anni", "peso_kg"]].corr(), annot=True, cmap="coolwarm")
-plt.title("correlazione eta vs peso")
+sns.heatmap(
+    train_df[["eta_anni", "livello_attivita_num"]].corr(),
+    annot=True,
+    cmap="coolwarm",
+    xticklabels=["eta_anni", "livello_attivita"],
+    yticklabels=["eta_anni", "livello_attivita"]
+)
+plt.title("correlazione eta vs livello attivita")
 plt.tight_layout()
 plt.savefig("grafici/correlazione.png")
 plt.close()
