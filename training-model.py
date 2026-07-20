@@ -51,6 +51,9 @@ df["eta_anni"] = pd.to_numeric(df["eta_anni"], errors="coerce").fillna(0)
 cols = ["sesso", "lunghezza_pelo", "colore_mantello", "livello_attivita",
         "frequenza_miagolio", "sterilizzato", "patologia"]
 
+# salvo livello_attivita originale prima che cat.codes la sovrascriva
+df["livello_attivita_orig"] = df["livello_attivita"]
+
 for c in cols:
     df[c] = df[c].fillna("vuoto").astype("category").cat.codes
 # converto anche la razza in numero, che è quello che il modello dovrà predire
@@ -152,15 +155,6 @@ plt.tight_layout()
 plt.savefig("grafici/razze.png")
 plt.close()
 
-
-# heatmap correlazione tra le feature numeriche  richiesto dal regolamento 
-plt.figure(figsize=(5, 4))
-sns.heatmap(train_df[["eta_anni", "peso_kg"]].corr(), annot=True, cmap="coolwarm")
-plt.title("correlazione eta vs peso")
-plt.tight_layout()
-plt.savefig("grafici/correlazione.png")
-plt.close()
-
 # matrice della confusione cioè mostra fli errori del modello razza per razza
 # sulla diagonale ci sono i gatti classificati correttamente
 # fuori dalla diagonale ci sono gli erorri
@@ -174,6 +168,23 @@ plt.ylabel("reale")
 plt.xlabel("predetto")
 plt.tight_layout()
 plt.savefig("grafici/confusione.png")
+plt.close()
+
+# heatmap correlazione tra eta e livello di attivita
+# usiamo un mapping manuale così i numeri hanno senso sedentario=0, molto_attivo=3
+ordine_attivita = {"sedentario": 0, "moderato": 1, "attivo": 2, "molto_attivo": 3}
+train_df["livello_attivita_num"] = train_df["livello_attivita_orig"].map(ordine_attivita)
+plt.figure(figsize=(5, 4))
+sns.heatmap(
+    train_df[["eta_anni", "livello_attivita_num"]].corr(),
+    annot=True,
+    cmap="coolwarm",
+    xticklabels=["eta_anni", "livello_attivita"],
+    yticklabels=["eta_anni", "livello_attivita"]
+)
+plt.title("correlazione eta vs livello attivita")
+plt.tight_layout()
+plt.savefig("grafici/correlazione.png")
 plt.close()
 
 
